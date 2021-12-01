@@ -83,7 +83,6 @@ defmodule Ueberauth.Strategy.Auth0 do
     ],
     oauth2_module: Ueberauth.Strategy.Auth0.OAuth
 
-  alias OAuth2.{Client, Error, Response}
   alias Plug.Conn
   alias Ueberauth.Auth.{Credentials, Extra, Info}
 
@@ -172,26 +171,13 @@ defmodule Ueberauth.Strategy.Auth0 do
     |> put_private(:auth0_token, nil)
   end
 
-  defp fetch_user(conn, %{token: token} = client, state) do
-    conn =
-      conn
-      |> put_private(:auth0_token, token)
-      |> put_private(:auth0_state, state)
+  defp fetch_user(conn, %{token: token}, state) do
+    decoded = JOSE.JWT.peek(token.other_params["id_token"])
 
-    case Client.get(client, "/userinfo") do
-      {:ok, %Response{status_code: 401, body: _body}} ->
-        set_errors!(conn, [error("token", "unauthorized")])
-
-      {:ok, %Response{status_code: status_code, body: user}}
-      when status_code in 200..399 ->
-        put_private(conn, :auth0_user, user)
-
-      {:error, %Response{body: body}} ->
-        set_errors!(conn, [error("OAuth2", body)])
-
-      {:error, %Error{reason: reason}} ->
-        set_errors!(conn, [error("OAuth2", reason)])
-    end
+    conn
+    |> put_private(:auth0_token, token)
+    |> put_private(:auth0_state, state)
+    |> put_private(:auth0_user, decoded.fields)
   end
 
   @doc """
